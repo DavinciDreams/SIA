@@ -1,0 +1,5 @@
+langchain
+llama-index
+faiss-cpu
+gitpython
+pytest

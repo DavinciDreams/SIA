@@ -1,0 +1,31 @@
+# docker-compose.yml for SIA Project
+# Orchestrates API service and vector database for local development
+
+version: "3.9"
+
+services:
+  sia-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sia-api
+    command: python sia_api.py
+    ports:
+      - "8000:8000"  # Expose API on localhost:8000
+    environment:
+      - VECTOR_DB_HOST=vector-db
+      - VECTOR_DB_PORT=6333
+    depends_on:
+      - vector-db
+
+  vector-db:
+    image: qdrant/qdrant:latest  # Example vector DB, replace as needed
+    container_name: vector-db
+    ports:
+      - "6333:6333"  # Qdrant REST API
+      - "6334:6334"  # Qdrant gRPC
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+    # No authentication for local dev; secure in production
+
+# To start: docker-compose up --build

@@ -1,0 +1,88 @@
+# Kubernetes deployment for SIA Project
+# Includes API deployment, service, and vector DB (Qdrant) deployment
+# Adjust resource requests/limits and storage for production as needed
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sia-api
+spec:
+  replicas: 2  # Adjust for desired scale
+  selector:
+    matchLabels:
+      app: sia-api
+  template:
+    metadata:
+      labels:
+        app: sia-api
+    spec:
+      containers:
+        - name: sia-api
+          image: sia-api:latest  # Build and push this image to your registry
+          imagePullPolicy: IfNotPresent
+          command: ["python", "sia_api.py"]
+          ports:
+            - containerPort: 8000
+          env:
+            - name: VECTOR_DB_HOST
+              value: "vector-db"
+            - name: VECTOR_DB_PORT
+              value: "6333"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sia-api
+spec:
+  selector:
+    app: sia-api
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vector-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vector-db
+  template:
+    metadata:
+      labels:
+        app: vector-db
+    spec:
+      containers:
+        - name: vector-db
+          image: qdrant/qdrant:latest
+          ports:
+            - containerPort: 6333
+            - containerPort: 6334
+          volumeMounts:
+            - name: qdrant-storage
+              mountPath: /qdrant/storage
+      volumes:
+        - name: qdrant-storage
+          emptyDir: {}  # Use PersistentVolumeClaim for production
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-db
+spec:
+  selector:
+    app: vector-db
+  ports:
+    - protocol: TCP
+      port: 6333
+      targetPort: 6333
+    - protocol: TCP
+      port: 6334
+      targetPort: 6334
+  type: ClusterIP
+
+# To deploy: kubectl apply -f k8s-deployment.yaml
