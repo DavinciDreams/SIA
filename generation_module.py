@@ -139,26 +139,48 @@ class GenerationModule:
 
     def run_local_tests(self, code_path):
         """
-        Run local tests (e.g., pytest) on the generated code.
-
+        Run local tests (pytest) on the generated code.
         Args:
             code_path (str): Path to the code or test directory.
-
         Returns:
             dict: Test results summary.
         """
-        # Placeholder: Replace with pytest integration
-        return {"status": "success", "details": "All tests passed (placeholder)."}
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["pytest", code_path],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            return {
+                "status": "success" if result.returncode == 0 else "failure",
+                "details": result.stdout + "\n" + result.stderr
+            }
+        except Exception as e:
+            return {"status": "error", "details": str(e)}
 
     def safety_check(self, code):
         """
-        Perform safety checks on the generated code (static analysis or prompt-based).
-
+        Perform safety checks on the generated code using static analysis.
         Args:
             code (str): The code to check.
-
         Returns:
             dict: Safety check results.
         """
-        # Placeholder: Replace with static analysis or prompt-based checks
-        return {"safe": True, "issues": []}
+        import ast
+        issues = []
+        try:
+            tree = ast.parse(code)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and getattr(node.func, 'id', None) == 'eval':
+                    issues.append("Use of 'eval' detected")
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name == "imp":
+                            issues.append("Use of deprecated library 'imp'")
+                if isinstance(node, ast.ImportFrom) and node.module == "imp":
+                    issues.append("Use of deprecated library 'imp'")
+        except Exception as e:
+            return {"safe": False, "issues": [str(e)]}
+        return {"safe": len(issues) == 0, "issues": issues}

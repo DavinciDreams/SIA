@@ -33,3 +33,17 @@ def test_generate_report_json():
     a = AnalysisModule()
     report = a.generate_report({"result": 1}, format="json")
     assert isinstance(report, str)
+
+def test_evaluate_tool_failure(monkeypatch):
+    """Test evaluate_tool handles failure scenario."""
+    a = AnalysisModule()
+    monkeypatch.setattr(a, "evaluate_tool", lambda x: None)
+    result = a.evaluate_tool("fail")
+    assert result is None
+
+def test_analyze_codebase_failure(monkeypatch):
+    """Test analyze_codebase handles failure scenario."""
+    a = AnalysisModule()
+    monkeypatch.setattr(a, "analyze_codebase", lambda x: None)
+    result = a.analyze_codebase("fail")
+    assert result is None

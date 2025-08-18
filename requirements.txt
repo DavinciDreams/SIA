@@ -3,3 +3,4 @@ llama-index
 faiss-cpu
 gitpython
 pytest
+pytest-cov

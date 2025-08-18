@@ -4,17 +4,24 @@ from generation_module import GenerationModule
 from integration_module import IntegrationModule
 import os
 import json
+import time
 from config import PR_RESULTS_PATH
+
+# Rate-limiting config (seconds)
+SELF_IMPROVEMENT_MIN_INTERVAL = int(os.getenv("SIA_SELF_IMPROVEMENT_MIN_INTERVAL", "600"))  # 10 min default
 
 class Orchestrator:
     """
     Core orchestrator module for SIA.
 
     Responsibilities:
-    - Coordinates the workflow and interactions between all core modules as described in the PRD.
-    - Manages execution order, data flow, and error handling across the system.
-    - Provides a unified interface for initiating and controlling SIA operations.
+        - Coordinates the workflow and interactions between all core modules as described in the PRD.
+        - Manages execution order, data flow, and error handling across the system.
+        - Provides a unified interface for initiating and controlling SIA operations.
+        - Adds rate-limiting for self-improvement cycles.
     """
+    _last_self_improvement_time = 0
+
 
     def __init__(self):
         """
@@ -31,8 +38,12 @@ class Orchestrator:
         """
         Main agent loop: coordinates memory retrieval, analysis, code generation, and PR submission.
         This is the core workflow for self-improvement cycles.
+        Enforces rate-limiting to prevent excessive cycles.
         """
-        # Placeholder: In production, this could be a scheduled loop or event-driven
+        now = time.time()
+        if now - Orchestrator._last_self_improvement_time < SELF_IMPROVEMENT_MIN_INTERVAL:
+            raise RuntimeError(f"Self-improvement cycle rate-limited. Try again in {int(SELF_IMPROVEMENT_MIN_INTERVAL - (now - Orchestrator._last_self_improvement_time))} seconds.")
+        Orchestrator._last_self_improvement_time = now
         memories = self.retrieve_memory()
         analysis_report = self.analyze(memories)
         code_diff = self.generate_code(analysis_report)
@@ -111,16 +122,21 @@ class Orchestrator:
     def run_self_analysis_cycle(self, code_paths=None, report_format="markdown"):
         """
         Run the self-analysis and reporting cycle.
-
+        Enforces rate-limiting to prevent excessive cycles.
+    
         Analyzes the codebase/tools and generates a report using the AnalysisModule.
-
+    
         Args:
             code_paths (list, optional): List of file paths to analyze. If None, analyzes orchestrator.py.
             report_format (str): Format of the report ('json' or 'markdown').
-
+    
         Returns:
             str: The generated analysis report.
         """
+        now = time.time()
+        if now - Orchestrator._last_self_improvement_time < SELF_IMPROVEMENT_MIN_INTERVAL:
+            raise RuntimeError(f"Self-improvement cycle rate-limited. Try again in {int(SELF_IMPROVEMENT_MIN_INTERVAL - (now - Orchestrator._last_self_improvement_time))} seconds.")
+        Orchestrator._last_self_improvement_time = now
         if code_paths is None:
             code_paths = ["orchestrator.py"]
         code_str = ""
@@ -134,19 +150,30 @@ class Orchestrator:
         report = self.analysis.generate_report(analysis_results, format=report_format)
         return report
 
-    # Placeholder for external triggers or UI integration
     def trigger_from_ui(self, event):
         """
-        Placeholder for UI or external event integration.
+        Handle UI or external event integration.
         Args:
             event (str): Event name or data from UI.
+        Returns:
+            str: Result of handling the event.
         """
-        pass
+        # Example: handle a "run_analysis" event
+        if event == "run_analysis":
+            return self.run_self_analysis_cycle()
+        elif event == "run_agent_loop":
+            return self.run_agent_loop()
+        else:
+            return f"Unknown event: {event}"
 
     def automate_code_and_pr_workflow(self, repo_url, file_path, branch_name, pr_title, pr_description):
         """
         Automate the workflow: analyze, generate code, integrate, and submit a PR.
         Persists PR results to disk.
+
+        Note:
+            PRs require explicit human approval before merging.
+            Previous commit hash is stored for rollback.
 
         Args:
             repo_url (str): URL of the remote repository.
@@ -174,6 +201,8 @@ class Orchestrator:
                 pr_result["status"] = "Failed to clone repository."
                 self.save_pr_result_to_disk(pr_result)
                 return pr_result["status"]
+            # Store previous commit hash for rollback
+            prev_commit = self.integration.get_current_version(temp_dir)
             # Step 4: Create branch
             if not self.integration.create_branch(temp_dir, branch_name):
                 pr_result["status"] = "Failed to create branch."
@@ -194,19 +223,22 @@ class Orchestrator:
                 pr_result["status"] = "Failed to push changes."
                 self.save_pr_result_to_disk(pr_result)
                 return pr_result["status"]
-            # Step 8: Create PR (prints to console)
-            pr_url = self.integration.create_pull_request(repo_url, branch_name, pr_title, pr_description)
+            # Step 8: Create PR (pending approval)
+            pr_id = self.integration.create_pull_request(repo_url, branch_name, pr_title, pr_description)
             pr_result = {
-                "status": "PR workflow completed",
+                "status": "PR pending approval",
                 "branch": branch_name,
-                "pr_url": pr_url,
+                "pr_id": pr_id,
                 "repo_url": repo_url,
                 "file_path": file_path,
                 "pr_title": pr_title,
-                "pr_description": pr_description
+                "pr_description": pr_description,
+                "approved": False,
+                "merged": False,
+                "rollback_commit": prev_commit
             }
             self.save_pr_result_to_disk(pr_result)
-            return f"PR workflow completed for branch '{branch_name}'."
+            return f"PR created for branch '{branch_name}' and is pending human approval before merge."
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -230,3 +262,52 @@ class Orchestrator:
         with open(full_path, "w", encoding="utf-8") as f:
             json.dump(pr_result, f, indent=2)
         return full_path
+def approve_and_merge_pr(self, pr_id):
+    """
+    Approve and merge a PR after explicit human approval.
+    Args:
+        pr_id (int): The PR ID to approve and merge.
+
+    Returns:
+        str: Merge result message.
+    """
+    # Find the PR result file
+    for fname in os.listdir(PR_RESULTS_PATH):
+        if fname.startswith("pr_result_"):
+            with open(os.path.join(PR_RESULTS_PATH, fname), "r+", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("pr_id") == pr_id:
+                    if data.get("approved"):
+                        return f"PR {pr_id} already approved and merged."
+                    # Simulate merge (actual implementation would call integration_module)
+                    data["approved"] = True
+                    data["merged"] = True
+                    f.seek(0)
+                    json.dump(data, f, indent=2)
+                    f.truncate()
+                    return f"PR {pr_id} approved and merged."
+    return f"PR {pr_id} not found."
+
+def rollback_self_improvement(self, pr_id):
+    """
+    Rollback the repository to the previous commit for a given PR.
+    Args:
+        pr_id (int): The PR ID to rollback.
+    Returns:
+        str: Rollback result message.
+    """
+    for fname in os.listdir(PR_RESULTS_PATH):
+        if fname.startswith("pr_result_"):
+            with open(os.path.join(PR_RESULTS_PATH, fname), "r+", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("pr_id") == pr_id:
+                    rollback_commit = data.get("rollback_commit")
+                    if not rollback_commit:
+                        return f"No rollback commit found for PR {pr_id}."
+                    # Placeholder: Actual implementation would reset the repo to rollback_commit
+                    data["rolled_back"] = True
+                    f.seek(0)
+                    json.dump(data, f, indent=2)
+                    f.truncate()
+                    return f"PR {pr_id} rolled back to commit {rollback_commit}."
+    return f"PR {pr_id} not found for rollback."

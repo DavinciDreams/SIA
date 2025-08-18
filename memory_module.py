@@ -2,7 +2,9 @@ import logging
 import numpy as np
 import os
 import json
-from config import VECTOR_DB, PINECONE_API_KEY, PINECONE_ENV, MEMORY_STORAGE_PATH
+from config import VECTOR_DB, PINECONE_API_KEY, PINECONE_ENV, MEMORY_STORAGE_PATH, SIA_ENCRYPTION_KEY
+from cryptography.fernet import Fernet, InvalidToken
+import base64
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +23,7 @@ except ImportError:
 class MemoryModule:
     """
     Core memory management module for SIA.
+    All persistent memory data is encrypted at rest using Fernet symmetric encryption.
 
     Now supports persistent storage of memories and metadata to disk using JSON.
     Storage location is configurable via config.py (MEMORY_STORAGE_PATH).
@@ -34,6 +37,7 @@ class MemoryModule:
     def __init__(self, embedding_dim=384, storage_path=None):
         """
         Initialize the MemoryModule with vector DB integration (FAISS or Pinecone) and persistent storage.
+        All persistent memory data is encrypted at rest.
 
         Args:
             embedding_dim (int): Dimension of the embedding vectors.
@@ -46,6 +50,16 @@ class MemoryModule:
         self.index = None
         self.pinecone_index = None
         self.storage_path = storage_path or MEMORY_STORAGE_PATH
+
+        # Setup encryption
+        if not SIA_ENCRYPTION_KEY:
+            logger.error("SIA_ENCRYPTION_KEY is not set. Generate one with Fernet.generate_key() and set as env variable.")
+            raise ValueError("SIA_ENCRYPTION_KEY is required for encryption.")
+        try:
+            self.fernet = Fernet(SIA_ENCRYPTION_KEY.encode() if isinstance(SIA_ENCRYPTION_KEY, str) else SIA_ENCRYPTION_KEY)
+        except Exception as e:
+            logger.error(f"Invalid SIA_ENCRYPTION_KEY: {e}", exc_info=True)
+            raise
 
         if self.vector_db == "faiss":
             if faiss:
@@ -213,7 +227,9 @@ class MemoryModule:
 
     def prune_memories(self, relevance_threshold=-0.5, memory_type=None):
         """
-        Prune memories with similarity scores below the relevance threshold, optionally by memory type.
+        Prune memories with similarity scores below the relevance threshold.
+
+        Optionally restricts pruning to a specific memory_type ("episodic", "semantic", "procedural").
 
         Args:
             relevance_threshold (float): Minimum similarity score to keep.
@@ -280,34 +296,65 @@ class MemoryModule:
 
     def save_to_disk(self):
         """
-        Persist all memories to disk as JSON.
-
+        Persist all memories to disk as encrypted JSON.
         The file is stored at self.storage_path.
         Includes error handling and logging.
+        Audit log is written for each save operation.
         """
         try:
             data = {
                 "memories": self.memories
             }
             os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
-            with open(self.storage_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
-            logger.info(f"Memories saved to disk at {self.storage_path}")
+            plaintext = json.dumps(data, indent=2).encode("utf-8")
+            ciphertext = self.fernet.encrypt(plaintext)
+            with open(self.storage_path, "wb") as f:
+                f.write(ciphertext)
+            logger.info(f"Memories saved (encrypted) to disk at {self.storage_path}")
+            self._audit_log("save_to_disk", {"storage_path": self.storage_path, "memory_count": len(self.memories)})
         except Exception as e:
             logger.error(f"Error saving memories to disk: {e}", exc_info=True)
+            self._audit_log("save_to_disk_error", {"error": str(e)})
 
     def load_from_disk(self):
         """
         Load memories from disk if the file exists.
-
         The file is loaded from self.storage_path.
         Includes error handling and logging.
+        Audit log is written for each load operation.
         """
         try:
             if os.path.exists(self.storage_path):
-                with open(self.storage_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    self.memories = data.get("memories", [])
-                logger.info(f"Memories loaded from disk at {self.storage_path}")
+                with open(self.storage_path, "rb") as f:
+                    ciphertext = f.read()
+                    try:
+                        plaintext = self.fernet.decrypt(ciphertext)
+                        data = json.loads(plaintext.decode("utf-8"))
+                        self.memories = data.get("memories", [])
+                        logger.info(f"Memories loaded (decrypted) from disk at {self.storage_path}")
+                        self._audit_log("load_from_disk", {"storage_path": self.storage_path, "memory_count": len(self.memories)})
+                    except InvalidToken:
+                        logger.error("Failed to decrypt memory storage file. Invalid encryption key or corrupted file.", exc_info=True)
+                        self.memories = []
+                        self._audit_log("load_from_disk_error", {"error": "InvalidToken"})
         except Exception as e:
             logger.error(f"Error loading memories from disk: {e}", exc_info=True)
+            self._audit_log("load_from_disk_error", {"error": str(e)})
+    def backup_memories(self, backup_dir="./sia_data/backups"):
+        """
+        Create a timestamped backup of the encrypted memory storage file.
+        """
+        import shutil
+        import datetime
+        os.makedirs(backup_dir, exist_ok=True)
+        timestamp = datetime.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        backup_path = os.path.join(backup_dir, f"memories_{timestamp}.bak")
+        try:
+            shutil.copy2(self.storage_path, backup_path)
+            self._audit_log("backup_memories", {"backup_path": backup_path})
+            logger.info(f"Memory backup created at {backup_path}")
+            return backup_path
+        except Exception as e:
+            logger.error(f"Error creating memory backup: {e}", exc_info=True)
+            self._audit_log("backup_memories_error", {"error": str(e)})
+            return None

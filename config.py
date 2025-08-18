@@ -27,3 +27,9 @@ OPENAI_API_KEY = os.getenv("SIA_OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("SIA_OPENAI_MODEL", "gpt-3.5-turbo")
 HF_API_KEY = os.getenv("SIA_HF_API_KEY", "")
 HF_MODEL = os.getenv("SIA_HF_MODEL", "gpt2")
+
+# API authentication
+SIA_API_KEY = os.getenv("SIA_API_KEY", "changeme")  # Set this in your environment for production
+
+# Encryption key for memory encryption (Fernet key, base64-encoded)
+SIA_ENCRYPTION_KEY = os.getenv("SIA_ENCRYPTION_KEY", None)

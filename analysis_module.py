@@ -87,15 +87,29 @@ class AnalysisModule:
         self._last_metrics = metrics
         return True
 
-    def scheduled_analysis(self):
+    def scheduled_analysis(self, code_str, interval_seconds=3600):
         """
-        Placeholder for scheduled analysis logic.
-
+        Perform scheduled analysis at a fixed interval.
+        Args:
+            code_str (str): Source code to analyze.
+            interval_seconds (int): Interval in seconds between analyses.
         Returns:
-            None
+            dict: Latest analysis results.
         """
-        # To be implemented: scheduling logic for periodic analysis
-        pass
+        import threading
+
+        def run_periodic():
+            while True:
+                results = self.analyze_codebase(code_str)
+                report = self.generate_report(results)
+                with open(os.path.join(ANALYSIS_REPORTS_PATH, "scheduled_report.json"), "w", encoding="utf-8") as f:
+                    f.write(report)
+                time.sleep(interval_seconds)
+
+        import time
+        thread = threading.Thread(target=run_periodic, daemon=True)
+        thread.start()
+        return {"status": "Scheduled analysis started"}
 
     def generate_report(self, analysis_results, format="json"):
         """

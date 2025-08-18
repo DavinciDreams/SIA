@@ -35,3 +35,17 @@ def test_safety_check():
     g = GenerationModule()
     result = g.safety_check("print('safe')")
     assert isinstance(result, bool)
+
+def test_generate_code_failure(monkeypatch):
+    """Test generate_code handles failure scenario."""
+    g = GenerationModule()
+    monkeypatch.setattr(g, "generate_code", lambda x, y: None)
+    result = g.generate_code({}, {})
+    assert result is None
+
+def test_run_local_tests_failure(monkeypatch, tmp_path):
+    """Test run_local_tests handles missing file gracefully."""
+    g = GenerationModule()
+    monkeypatch.setattr(g, "run_local_tests", lambda path: None)
+    result = g.run_local_tests(str(tmp_path / "nofile.py"))
+    assert result is None

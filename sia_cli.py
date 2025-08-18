@@ -42,12 +42,21 @@ def main():
     pr_parser.add_argument("--repo-url", type=str, required=True, help="Remote repository URL.")
     pr_parser.add_argument("--file-path", type=str, required=True, help="File path for generated code.")
     pr_parser.add_argument("--branch-name", type=str, required=True, help="Feature branch name.")
-    pr_parser.add_argument("--pr-title", type=str, required=True, help="Pull request title.")
-    pr_parser.add_argument("--pr-description", type=str, required=True, help="Pull request description.")
     pr_parser.add_argument("--prompt", type=str, required=True, help="Prompt describing code to generate.")
+    pr_parser.add_argument("--reviewers", nargs="*", default=[], help="List of reviewers to assign.")
+    pr_parser.add_argument("--status", action="store_true", help="Show PR status after submission.")
+    pr_parser.add_argument("--auto", action="store_true", help="Auto-generate PR title/description from analysis.")
 
     args = parser.parse_args()
     orchestrator = Orchestrator()
+
+    # Add approve-pr subcommand
+    approve_parser = subparsers.add_parser("approve-pr", help="Approve and merge a PR by PR ID.")
+    approve_parser.add_argument("--pr-id", type=int, required=True, help="PR ID to approve and merge.")
+
+    # Add rollback-pr subcommand
+    rollback_parser = subparsers.add_parser("rollback-pr", help="Rollback a PR's self-improvement by PR ID.")
+    rollback_parser.add_argument("--pr-id", type=int, required=True, help="PR ID to rollback.")
 
     if args.command == "memory":
         if args.store:
@@ -78,15 +87,34 @@ def main():
         print("Generated code written to", args.file_path)
         print(result)
     elif args.command == "pr":
-        """Automate code generation and PR submission workflow."""
-        result = orchestrator.automate_code_and_pr_workflow(
+        """Automate code generation and PR submission workflow with enhanced options."""
+        if args.auto:
+            # Run analysis and auto-generate PR metadata
+            analysis_summary = orchestrator.run_self_analysis_cycle(code_paths=[args.file_path], report_format="markdown")
+            pr_title, pr_description = orchestrator.integration_module.generate_pr_metadata(analysis_summary, args.prompt)
+        else:
+            pr_title = getattr(args, "pr_title", "Automated PR")
+            pr_description = getattr(args, "pr_description", args.prompt)
+        result, pr_id = orchestrator.automate_code_and_pr_workflow(
             repo_url=args.repo_url,
             file_path=args.file_path,
             branch_name=args.branch_name,
-            pr_title=args.pr_title,
-            pr_description=args.pr_description,
-            prompt=args.prompt
+            pr_title=pr_title,
+            pr_description=pr_description,
+            prompt=args.prompt,
+            return_pr_id=True
         )
+        if args.reviewers:
+            orchestrator.integration_module.assign_reviewers(args.repo_url, pr_id, args.reviewers)
+        if args.status:
+            status = orchestrator.integration_module.monitor_pr_status(args.repo_url, pr_id)
+            print("PR Status:", status)
+        print(result)
+    elif args.command == "approve-pr":
+        result = orchestrator.approve_and_merge_pr(args.pr_id)
+        print(result)
+    elif args.command == "rollback-pr":
+        result = orchestrator.rollback_self_improvement(args.pr_id)
         print(result)
     else:
         parser.print_help()
