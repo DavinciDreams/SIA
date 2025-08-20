@@ -13,3 +13,4 @@ pydantic
 rich
 cryptography
 pinecone
+python-dotenv
