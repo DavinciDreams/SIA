@@ -4,6 +4,7 @@ Thank you for your interest in contributing to SIA! This guide outlines the proc
 
 ---
 
+
 ## How to Contribute
 
 1. **Fork the repository** and create a new branch for your feature or bugfix.
@@ -14,6 +15,21 @@ Thank you for your interest in contributing to SIA! This guide outlines the proc
 
 ---
 
+## Environment & LLM Provider Configuration
+
+SIA supports multiple LLM providers: OpenAI, Hugging Face, OpenRouter, Anthropic, and LM Studio. Before running or testing SIA, ensure you have set the required environment variables for your chosen provider(s).
+
+- See [`.env.example`](.env.example:1) for all required variables, example values, and configuration comments.
+- Supported providers and key variables:
+  - **OpenAI**: `SIA_OPENAI_API_KEY`, `SIA_OPENAI_MODEL`
+  - **Hugging Face**: `SIA_HF_API_KEY`, `SIA_HF_MODEL`
+  - **OpenRouter**: `SIA_OPENROUTER_API_KEY`, `SIA_OPENROUTER_MODEL`
+  - **Anthropic**: `SIA_ANTHROPIC_API_KEY`, `SIA_ANTHROPIC_MODEL`
+  - **LM Studio**: `SIA_LMSTUDIO_API_BASE_URL`, `SIA_LMSTUDIO_MODEL`
+
+Set `SIA_LLM_PROVIDER` to select the provider. Refer to `.env.example` for details.
+
+---
 ## Code Style
 
 - Follow [PEP 8](https://pep8.org/) for Python code style.

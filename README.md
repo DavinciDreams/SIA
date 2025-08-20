@@ -97,7 +97,21 @@ SIA is organized into the following core modules:
    ```bash
    pip install -r requirements.txt
    ```
-3. (Optional) Run tests with coverage:
+
+3. Configure LLM provider environment variables:
+
+   SIA supports multiple LLM providers: OpenAI, Hugging Face, OpenRouter, Anthropic, and LM Studio. Set the required environment variables for your chosen provider(s) as described in [`.env.example`](.env.example:1).
+
+   - Supported providers and key variables:
+     - **OpenAI**: `SIA_OPENAI_API_KEY`, `SIA_OPENAI_MODEL`
+     - **Hugging Face**: `SIA_HF_API_KEY`, `SIA_HF_MODEL`
+     - **OpenRouter**: `SIA_OPENROUTER_API_KEY`, `SIA_OPENROUTER_MODEL`
+     - **Anthropic**: `SIA_ANTHROPIC_API_KEY`, `SIA_ANTHROPIC_MODEL`
+     - **LM Studio**: `SIA_LMSTUDIO_API_BASE_URL`, `SIA_LMSTUDIO_MODEL`
+
+   Set `SIA_LLM_PROVIDER` to select the provider. See `.env.example` for example values and comments.
+
+4. (Optional) Run tests with coverage:
    ```bash
    pytest --cov=. --cov-report=term-missing --cov-fail-under=80
    ```

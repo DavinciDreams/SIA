@@ -49,3 +49,33 @@ def test_run_local_tests_failure(monkeypatch, tmp_path):
     monkeypatch.setattr(g, "run_local_tests", lambda path: None)
     result = g.run_local_tests(str(tmp_path / "nofile.py"))
     assert result is None
+import pytest
+from unittest.mock import patch, MagicMock
+
+@pytest.mark.parametrize("provider", ["openrouter", "anthropic", "lmstudio"])
+def test_provider_initialization_and_selection(provider):
+    g = GenerationModule()
+    config = {"provider": provider}
+    with patch.object(g, "_select_provider") as mock_select:
+        g.generate_code(config, {})
+        mock_select.assert_called_with(provider)
+
+@pytest.mark.parametrize("provider, mock_response", [
+    ("openrouter", {"choices": [{"text": "result"}]}),
+    ("anthropic", {"completion": "result"}),
+    ("lmstudio", {"result": "result"})
+])
+def test_provider_invocation_and_response_parsing(provider, mock_response):
+    g = GenerationModule()
+    config = {"provider": provider}
+    with patch.object(g, "_call_provider", return_value=mock_response):
+        result = g.generate_code(config, {})
+        assert result is not None
+
+@pytest.mark.parametrize("provider", ["openrouter", "anthropic", "lmstudio"])
+def test_provider_error_handling(provider):
+    g = GenerationModule()
+    config = {"provider": provider}
+    with patch.object(g, "_call_provider", side_effect=Exception("fail")):
+        result = g.generate_code(config, {})
+        assert result is None
