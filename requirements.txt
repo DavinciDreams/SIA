@@ -4,3 +4,12 @@ faiss-cpu
 gitpython
 pytest
 pytest-cov
+requests
+anthropic
+openai
+transformers
+fastapi
+pydantic
+rich
+cryptography
+pinecone
